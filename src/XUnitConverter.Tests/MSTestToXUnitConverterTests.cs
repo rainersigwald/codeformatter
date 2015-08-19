@@ -177,6 +177,45 @@ namespace System.Composition.UnitTests
         }
 
         [Fact]
+        public async Task TestSkipsIgnoredTests()
+        {
+            var text = @"
+using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace System.Composition.UnitTests
+{
+    public class MyTestClass
+    {
+        [TestMethod]
+        [Ignore]
+        public void MyTestMethod()
+        {
+        }
+    }
+}
+";
+
+            var expected = @"
+using System;
+using Xunit;
+
+namespace System.Composition.UnitTests
+{
+    public class MyTestClass
+    {
+        [Fact(Skip = ""Ignored in MSTest"")]
+        public void MyTestMethod()
+        {
+        }
+    }
+}
+";
+            await Verify(text, expected);
+        }
+
+
+        [Fact]
         public async Task TestUpdatesAsserts()
         {
             var text = @"
