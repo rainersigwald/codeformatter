@@ -90,6 +90,7 @@ namespace XUnitConverter
             RemoveTestClassAttributes(root, semanticModel, transformationTracker);
             RemoveContractsRequiredAttributes(root, semanticModel, transformationTracker);
             ChangeTestMethodAttributesToFact(root, semanticModel, transformationTracker);
+            RemoveIgnoreAttributes(root, semanticModel, transformationTracker);
             ChangeAssertCalls(root, semanticModel, transformationTracker);
             root = transformationTracker.TransformRoot(root);
 
@@ -126,6 +127,11 @@ namespace XUnitConverter
         private void RemoveTestClassAttributes(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)
         {
             RemoveTestAttributes(root, semanticModel, transformationTracker, "TestClassAttribute");
+        }
+
+        private void RemoveIgnoreAttributes(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)
+        {
+            RemoveTestAttributes(root, semanticModel, transformationTracker, "IgnoreAttribute");
         }
 
         private void RemoveTestAttributes(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker, string attributeName)
@@ -173,6 +179,7 @@ namespace XUnitConverter
         private void ChangeTestMethodAttributesToFact(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)
         {
             List<AttributeSyntax> nodesToReplace = new List<AttributeSyntax>();
+            List<AttributeSyntax> nodesToReplaceWithSkip = new List<AttributeSyntax>();
 
             foreach (var attributeSyntax in root.DescendantNodes().OfType<AttributeSyntax>())
             {
@@ -182,7 +189,14 @@ namespace XUnitConverter
                     string attributeTypeDocID = typeInfo.Type.GetDocumentationCommentId();
                     if (IsTestNamespaceType(attributeTypeDocID, "TestMethodAttribute"))
                     {
-                        nodesToReplace.Add(attributeSyntax);
+                        if (HasSiblingIgnoreAttribute(semanticModel, attributeSyntax))
+                        {
+                            nodesToReplaceWithSkip.Add(attributeSyntax);
+                        }
+                        else
+                        {
+                            nodesToReplace.Add(attributeSyntax);
+                        }
                     }
                 }
             }
@@ -194,6 +208,45 @@ namespace XUnitConverter
                     return ((AttributeSyntax)rewrittenNode).WithName(SyntaxFactory.ParseName("Fact")).NormalizeWhitespace();
                 });
             });
+
+            transformationTracker.AddTransformation(nodesToReplaceWithSkip, (transformationRoot, rewrittenNodes, originalNodeMap) =>
+            {
+                return transformationRoot.ReplaceNodes(rewrittenNodes, (originalNode, rewrittenNode) =>
+                {
+                    return ((AttributeSyntax)rewrittenNode)
+                        .WithName(SyntaxFactory.ParseName("Fact"))
+                        .WithArgumentList(SyntaxFactory.ParseAttributeArgumentList("(Skip=\"Ignored in MSTest\")"))
+                        .NormalizeWhitespace();
+                });
+            });
+
+        }
+
+        private static bool HasSiblingIgnoreAttribute(SemanticModel semanticModel, AttributeSyntax attributeSyntax)
+        {
+            var methodSyntax = attributeSyntax.Parent.Parent as MethodDeclarationSyntax;
+            if (methodSyntax == null)
+            {
+                return false;
+            }
+
+            foreach (var attributeListSyntax in methodSyntax.AttributeLists)
+            {
+                foreach (var siblingAttributeSyntax in attributeListSyntax.Attributes)
+                {
+                    var typeInfo = semanticModel.GetTypeInfo(siblingAttributeSyntax);
+                    if (typeInfo.Type != null)
+                    {
+                        string attributeTypeDocID = typeInfo.Type.GetDocumentationCommentId();
+                        if (IsTestNamespaceType(attributeTypeDocID, "IgnoreAttribute"))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
 
         private void ChangeAssertCalls(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)
