@@ -219,7 +219,6 @@ namespace XUnitConverter
                         .NormalizeWhitespace();
                 });
             });
-
         }
 
         private static bool HasSiblingIgnoreAttribute(SemanticModel semanticModel, AttributeSyntax attributeSyntax)
