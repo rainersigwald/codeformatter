@@ -78,6 +78,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssertArgumentOrderConverter.cs" />
+    <Compile Include="AssertMessageToCommentConverter.cs" />
     <Compile Include="ConverterBase.cs" />
     <Compile Include="NameHelper.cs" />
     <Compile Include="Program.cs" />
