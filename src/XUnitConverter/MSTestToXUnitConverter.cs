@@ -92,6 +92,7 @@ namespace XUnitConverter
             ChangeTestMethodAttributesToFact(root, semanticModel, transformationTracker);
             RemoveIgnoreAttributes(root, semanticModel, transformationTracker);
             ChangeAssertCalls(root, semanticModel, transformationTracker);
+            ChangeExpectedExceptionAttributesToThrows(root, semanticModel, transformationTracker);
             root = transformationTracker.TransformRoot(root);
 
 
@@ -174,6 +175,86 @@ namespace XUnitConverter
                 }
                 return transformationRoot;
             });
+        }
+
+        private void ChangeExpectedExceptionAttributesToThrows(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)
+        {
+            List<BlockSyntax> bodiesToReplace = new List<BlockSyntax>();
+            Dictionary<BlockSyntax, TypeSyntax> bodyToExceptionTypeMap = new Dictionary<BlockSyntax, TypeSyntax>();
+
+            foreach (var node in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                // Check through all attributes for an ExpectedException
+                foreach (var attributeListSyntax in node.AttributeLists)
+                {
+                    foreach (var attributeSyntax in attributeListSyntax.Attributes)
+                    {
+                        if (IsExpectedExceptionAttribute(attributeSyntax, semanticModel))
+                        {
+                            // Expect one argument, 'typeof(something)'
+                            if (attributeSyntax.ArgumentList.Arguments.Count == 1)
+                            {
+                                var typeofExpression = attributeSyntax.ArgumentList.Arguments[0].Expression as TypeOfExpressionSyntax;
+                                if (typeofExpression != null)
+                                {
+                                    // We found the attribute and successfully extracted an expected exception type.
+                                    // Note that we want to replace this body
+                                    bodiesToReplace.Add(node.Body);
+                                    // And associate the body with the exception type.
+                                    bodyToExceptionTypeMap[node.Body] = typeofExpression.Type;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            RemoveTestAttributes(root, semanticModel, transformationTracker, "ExpectedExceptionAttribute");
+
+            transformationTracker.AddTransformation(bodiesToReplace, (transformationRoot, rewrittenNodes, originalNodeMap) =>
+            {
+                return transformationRoot.ReplaceNodes(rewrittenNodes, (originalNode, rewrittenNode) =>
+                {
+                    var realOriginalNode = (BlockSyntax)originalNodeMap[originalNode];
+                    var expectedExceptionType = bodyToExceptionTypeMap[realOriginalNode];
+
+                    return SyntaxFactory.Block(
+                                SyntaxFactory.SingletonList<StatementSyntax>(
+                                    SyntaxFactory.ExpressionStatement(
+                                        SyntaxFactory.InvocationExpression(
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.IdentifierName(
+                                                    @"Assert"),
+                                                SyntaxFactory.GenericName(
+                                                    SyntaxFactory.Identifier(
+                                                        @"Throws"))
+                                                .WithTypeArgumentList(
+                                                    SyntaxFactory.TypeArgumentList(
+                                                        SyntaxFactory.SingletonSeparatedList(expectedExceptionType)))))
+                                        .WithArgumentList(
+                                            SyntaxFactory.ArgumentList(
+                                                SyntaxFactory.SingletonSeparatedList(
+                                                    SyntaxFactory.Argument(
+                                                        SyntaxFactory.ParenthesizedLambdaExpression((BlockSyntax)rewrittenNode)
+                                                        .WithParameterList(
+                                                            SyntaxFactory.ParameterList())))).WithCloseParenToken(SyntaxFactory.Token(SyntaxKind.CloseParenToken))))));
+                });
+            });
+        }
+
+        private bool IsExpectedExceptionAttribute(AttributeSyntax attributeSyntax, SemanticModel semanticModel)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(attributeSyntax);
+            if (typeInfo.Type != null)
+            {
+                string attributeTypeDocID = typeInfo.Type.GetDocumentationCommentId();
+                if (IsTestNamespaceType(attributeTypeDocID, "ExpectedExceptionAttribute")) { 
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void ChangeTestMethodAttributesToFact(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker)

@@ -214,7 +214,6 @@ namespace System.Composition.UnitTests
             await Verify(text, expected);
         }
 
-
         [Fact]
         public async Task TestUpdatesAsserts()
         {
@@ -270,6 +269,44 @@ namespace System.Composition.UnitTests
 }
 ";
             await Verify(text, expected);
+        }
+
+        [Fact]
+        public async Task TestWrapWholeExpectedExceptionBlock()
+        {
+            string source = @"
+using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+public class Tests
+{
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void TestA()
+    {
+        Assert.AreEqual(1, 1);
+    }
+}
+";
+            string expected = @"
+using System;
+using Xunit;
+
+public class Tests
+{
+    [Fact]
+    public void TestA()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            Assert.Equal(1, 1);
+        }
+       );
+    }
+}
+";
+
+            await Verify(source, expected);
         }
     }
 }
