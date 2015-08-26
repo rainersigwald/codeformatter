@@ -193,8 +193,10 @@ namespace XUnitConverter
                         {
                             nodesToReplaceWithSkip.Add(attributeSyntax);
                         }
-
-                        nodesToReplace.Add(attributeSyntax);
+                        else
+                        {
+                            nodesToReplace.Add(attributeSyntax);
+                        }
                     }
                 }
             }
