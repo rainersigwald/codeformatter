@@ -238,7 +238,6 @@ namespace System.Composition.UnitTests
             Assert.AreNotSame(obj, new object());
             Assert.IsTrue(true);
             Assert.IsFalse(false);
-            Assert.IsInstanceOfType(string.Empty, typeof(String));
         }
     }
 }
@@ -264,7 +263,6 @@ namespace System.Composition.UnitTests
             Assert.NotSame(obj, new object());
             Assert.True(true);
             Assert.False(false);
-            Assert.IsAssignableFrom(typeof(String), string.Empty);
         }
     }
 }

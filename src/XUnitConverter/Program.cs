@@ -35,6 +35,7 @@ namespace XUnitConverter
             var converters = new ConverterBase[]
                 {
                     new AssertMessageToCommentConverter(),
+                    new AssertTypeConverter(),
                     new MSTestToXUnitConverter(),
                     new TestAssertTrueOrFalseConverter(),
                     new AssertArgumentOrderConverter(),
