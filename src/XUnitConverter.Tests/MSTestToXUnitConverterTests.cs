@@ -104,6 +104,46 @@ namespace System.Composition.UnitTests
         }
 
         [Fact]
+        public async Task TestRemovesMultipleTestClassAttributes()
+        {
+            var text = @"
+using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace System.Composition.UnitTests
+{
+    [TestClass]
+    public class MyTestClass
+    {
+    }
+
+    [TestClass]
+    public class MyTestClass2
+    {
+    }
+}
+";
+
+            var expected = @"
+using System;
+using Xunit;
+
+namespace System.Composition.UnitTests
+{
+    public class MyTestClass
+    {
+    }
+
+    public class MyTestClass2
+    {
+    }
+}
+";
+            await Verify(text, expected);
+        }
+
+
+        [Fact]
         public async Task TestPreserveClassDocComments()
         {
             string text = @"
@@ -296,6 +336,62 @@ public class Tests
 {
     [Fact]
     public void TestA()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            Assert.Equal(1, 1);
+        }
+       );
+    }
+}
+";
+
+            await Verify(source, expected);
+        }
+
+        [Fact]
+        public async Task TestRemoveExpectedExceptionMoreThanOnce()
+        {
+            string source = @"
+using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+public class Tests
+{
+    [TestMethod]
+    [ExpectedException(typeof(ArgumentNullException))]
+    public void TestA()
+    {
+        Assert.AreEqual(1, 1);
+    }
+
+    [ExpectedException(typeof(ArgumentNullException))]
+    [TestMethod]
+    public void TestB()
+    {
+        Assert.AreEqual(1, 1);
+    }
+
+}
+";
+            string expected = @"
+using System;
+using Xunit;
+
+public class Tests
+{
+    [Fact]
+    public void TestA()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+        {
+            Assert.Equal(1, 1);
+        }
+       );
+    }
+
+    [Fact]
+    public void TestB()
     {
         Assert.Throws<ArgumentNullException>(() =>
         {

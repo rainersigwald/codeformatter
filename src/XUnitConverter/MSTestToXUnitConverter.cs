@@ -137,11 +137,12 @@ namespace XUnitConverter
 
         private void RemoveTestAttributes(CompilationUnitSyntax root, SemanticModel semanticModel, TransformationTracker transformationTracker, string attributeName)
         {
-            List<AttributeSyntax> nodesToRemove = new List<AttributeSyntax>();
+            List<AttributeSyntax> attributeNodesToRemove = new List<AttributeSyntax>();
+            List<AttributeListSyntax> attributeListNodesToRemove = new List<AttributeListSyntax>();
 
             foreach (var attributeListSyntax in root.DescendantNodes().OfType<AttributeListSyntax>())
             {
-                var attributesToRemove = attributeListSyntax.Attributes.Where(attributeSyntax =>
+                foreach (var attributeSyntax in attributeListSyntax.Attributes)
                 {
                     var typeInfo = semanticModel.GetTypeInfo(attributeSyntax);
                     if (typeInfo.Type != null)
@@ -149,31 +150,31 @@ namespace XUnitConverter
                         string attributeTypeDocID = typeInfo.Type.GetDocumentationCommentId();
                         if (IsTestNamespaceType(attributeTypeDocID, attributeName))
                         {
-                            return true;
+                            if (attributeListSyntax.Attributes.Count == 1)
+                            {
+                                // If there's only one attribute in the list, we'll remove the whole list
+                                attributeListNodesToRemove.Add(attributeListSyntax);
+                            }
+                            else
+                            {
+                                // Otherwise, we'll remove the attribute from the list
+                                attributeNodesToRemove.Add(attributeSyntax);
+                            }
                         }
                     }
-                    return false;
-                }).ToList();
-
-                nodesToRemove.AddRange(attributesToRemove);
+                    // Not what we're looking for; do nothing.
+                }
             }
 
-            transformationTracker.AddTransformation(nodesToRemove, (transformationRoot, rewrittenNodes, originalNodeMap) =>
+            transformationTracker.AddTransformation(attributeListNodesToRemove, (transformationRoot, rewrittenNodes, originalNodeMap) =>
             {
-                foreach (AttributeSyntax rewrittenNode in rewrittenNodes)
-                {
-                    var attributeListSyntax = (AttributeListSyntax)rewrittenNode.Parent;
-                    var newSyntaxList = attributeListSyntax.Attributes.Remove(rewrittenNode);
-                    if (newSyntaxList.Any())
-                    {
-                        transformationRoot = transformationRoot.ReplaceNode(attributeListSyntax, attributeListSyntax.WithAttributes(newSyntaxList));
-                    }
-                    else
-                    {
-                        transformationRoot = transformationRoot.RemoveNode(attributeListSyntax, SyntaxRemoveOptions.KeepLeadingTrivia);
-                    }
-                }
-                return transformationRoot;
+                return transformationRoot.RemoveNodes(rewrittenNodes, SyntaxRemoveOptions.KeepLeadingTrivia);
+            });
+
+
+            transformationTracker.AddTransformation(attributeNodesToRemove, (transformationRoot, rewrittenNodes, originalNodeMap) =>
+            {
+                return transformationRoot.RemoveNodes(rewrittenNodes, SyntaxRemoveOptions.KeepNoTrivia);
             });
         }
 
