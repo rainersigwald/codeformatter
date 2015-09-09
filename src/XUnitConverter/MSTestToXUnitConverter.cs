@@ -346,6 +346,7 @@ namespace XUnitConverter
             };
 
             Dictionary<SimpleNameSyntax, string> nameReplacementsForNodes = new Dictionary<SimpleNameSyntax, string>();
+            List<InvocationExpressionSyntax> assertFailMethodCalls = new List<InvocationExpressionSyntax>();
             List<InvocationExpressionSyntax> methodCallsToReverseArguments = new List<InvocationExpressionSyntax>();
 
             foreach (var methodCallSyntax in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
@@ -367,6 +368,13 @@ namespace XUnitConverter
                                 //  Parameter order is reversed between MSTest Assert.IsInstanceOfType and xUnit Assert.IsAssignableFrom
                                 methodCallsToReverseArguments.Add((InvocationExpressionSyntax)methodCallSyntax.Parent);
                             }
+
+                            continue;
+                        }
+
+                        if (methodCallSyntax.Name.Identifier.Text == "Fail" && methodCallSyntax.Parent is InvocationExpressionSyntax)
+                        {
+                            assertFailMethodCalls.Add((InvocationExpressionSyntax)methodCallSyntax.Parent);
                         }
                     }
                 }
@@ -393,6 +401,29 @@ namespace XUnitConverter
                         var newArguments = new SeparatedSyntaxList<ArgumentSyntax>().AddRange(new[] { oldArguments[1], oldArguments[0] });
 
                         return invocationExpression.WithArgumentList(invocationExpression.ArgumentList.WithArguments(newArguments));
+                    });
+                });
+            }
+
+            if (assertFailMethodCalls.Any())
+            {
+                transformationTracker.AddTransformation(assertFailMethodCalls, (transformationRoot, rewrittenNodes, originalNodeMap) =>
+                {
+                    return transformationRoot.ReplaceNodes(rewrittenNodes, (originalNode, rewrittenNode) =>
+                    {
+                        var invocationExpression = (InvocationExpressionSyntax)rewrittenNode;
+                        var newArguments = new SeparatedSyntaxList<ArgumentSyntax>()
+                            .Add(SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression)))
+                            .AddRange(invocationExpression.ArgumentList.Arguments);
+
+                        var oldExpression = (MemberAccessExpressionSyntax)invocationExpression.Expression;
+
+                        return invocationExpression
+                            .WithExpression(
+                                oldExpression.WithName(SyntaxFactory.IdentifierName("True")))
+                            .WithArgumentList(
+                                invocationExpression.ArgumentList
+                                    .WithArguments(newArguments));
                     });
                 });
             }

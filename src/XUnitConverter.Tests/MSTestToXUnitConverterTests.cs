@@ -278,6 +278,7 @@ namespace System.Composition.UnitTests
             Assert.IsTrue(true);
             Assert.IsFalse(false);
             Assert.IsInstanceOfType(string.Empty, typeof(String));
+            Assert.Fail(""message"");
         }
     }
 }
@@ -304,6 +305,7 @@ namespace System.Composition.UnitTests
             Assert.True(true);
             Assert.False(false);
             Assert.IsAssignableFrom(typeof(String), string.Empty);
+            Assert.True(false, ""message"");
         }
     }
 }
